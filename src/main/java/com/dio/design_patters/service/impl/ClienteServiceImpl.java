@@ -6,7 +6,9 @@ import com.dio.design_patters.model.Endereco;
 import com.dio.design_patters.model.EnderecoRepository;
 import com.dio.design_patters.service.ClienteService;
 import com.dio.design_patters.service.ViaCepService;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -14,7 +16,6 @@ import java.util.Optional;
 @Service
 public class ClienteServiceImpl implements ClienteService {
 
-    // Singleton: Injetar os componentes do Spring com @Autowired.
     @Autowired
     private ClienteRepository clienteRepository;
     @Autowired
@@ -22,54 +23,91 @@ public class ClienteServiceImpl implements ClienteService {
     @Autowired
     private ViaCepService viaCepService;
 
-    // Strategy: Implementar os métodos definidos na interface.
-    // Facade: Abstrair integrações com subsistemas, provendo uma interface simples.
-
     @Override
     public Iterable<Cliente> buscarTodos() {
-        // Buscar todos os Clientes.
-        return clienteRepository.findAll();
+        try {
+            return clienteRepository.findAll();
+        } catch (Exception e) {
+            // Log the exception and rethrow or handle it appropriately
+            // logger.error("Failed to fetch all clients", e);
+            throw new RuntimeException("Failed to fetch all clients", e);
+        }
     }
 
     @Override
     public Cliente buscarPorId(Long id) {
-        // Buscar Cliente por ID.
-        Optional<Cliente> cliente = clienteRepository.findById(id);
-        return cliente.get();
+        try {
+            Optional<Cliente> cliente = clienteRepository.findById(id);
+            if (cliente.isPresent()) {
+                return cliente.get();
+            } else {
+                throw new RuntimeException("Client not found with id: " + id);
+            }
+        } catch (Exception e) {
+            // Log the exception and rethrow or handle it appropriately
+            // logger.error("Failed to fetch client by id: " + id, e);
+            throw new RuntimeException("Failed to fetch client by id: " + id, e);
+        }
     }
 
     @Override
+    @Transactional
     public void inserir(Cliente cliente) {
-        salvarClienteComCep(cliente);
+        try {
+            salvarClienteComCep(cliente);
+        } catch (Exception e) {
+            // Log the exception and rethrow or handle it appropriately
+            // logger.error("Failed to insert client", e);
+            throw new RuntimeException("Failed to insert client", e);
+        }
     }
 
     @Override
+    @Transactional
     public void atualizar(Long id, Cliente cliente) {
-        // Buscar Cliente por ID, caso exista:
-        Optional<Cliente> clienteBd = clienteRepository.findById(id);
-        if (clienteBd.isPresent()) {
-            salvarClienteComCep(cliente);
+        try {
+            Optional<Cliente> clienteBd = clienteRepository.findById(id);
+            if (clienteBd.isPresent()) {
+                salvarClienteComCep(cliente);
+            } else {
+                throw new RuntimeException("Client not found with id: " + id);
+            }
+        } catch (Exception e) {
+            // Log the exception and rethrow or handle it appropriately
+            // logger.error("Failed to update client with id: " + id, e);
+            throw new RuntimeException("Failed to update client with id: " + id, e);
         }
     }
 
     @Override
     public void deletar(Long id) {
-        // Deletar Cliente por ID.
-        clienteRepository.deleteById(id);
+        try {
+            clienteRepository.deleteById(id);
+        } catch (EmptyResultDataAccessException e) {
+            // Handle case where the ID does not exist
+            // logger.warn("Client with id: " + id + " not found for deletion", e);
+            throw new RuntimeException("Client with id: " + id + " not found for deletion", e);
+        } catch (Exception e) {
+            // Log the exception and rethrow or handle it appropriately
+            // logger.error("Failed to delete client with id: " + id, e);
+            throw new RuntimeException("Failed to delete client with id: " + id, e);
+        }
     }
 
     private void salvarClienteComCep(Cliente cliente) {
-        // Verificar se o Endereco do Cliente já existe (pelo CEP).
-        String cep = cliente.getEndereco().getCep();
-        Endereco endereco = enderecoRepository.findById(cep).orElseGet(() -> {
-            // Caso não exista, integrar com o ViaCEP e persistir o retorno.
-            Endereco novoEndereco = viaCepService.consultarCep(cep);
-            enderecoRepository.save(novoEndereco);
-            return novoEndereco;
-        });
-        cliente.setEndereco(endereco);
-        // Inserir Cliente, vinculando o Endereco (novo ou existente).
-        clienteRepository.save(cliente);
+        try {
+            String cep = cliente.getEndereco().getCep();
+            Endereco endereco = enderecoRepository.findById(cep).orElseGet(() -> {
+                Endereco novoEndereco = viaCepService.consultarCep(cep);
+                enderecoRepository.save(novoEndereco);
+                return novoEndereco;
+            });
+            cliente.setEndereco(endereco);
+            clienteRepository.save(cliente);
+        } catch (Exception e) {
+            // Log the exception and rethrow or handle it appropriately
+            // logger.error("Failed to save client with CEP: " + cliente.getEndereco().getCep(), e);
+            throw new RuntimeException("Failed to save client with CEP: " + cliente.getEndereco().getCep(), e);
+        }
     }
-
 }
